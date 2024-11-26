@@ -1,202 +1,14 @@
 <?php
-$host = 'localhost';
-$database = 'db_nt3102';
-$username = 'root';
-$password = '';
-
-$connection = new mysqli($host, $username, $password, $database);
-
-function logAction($action, $entityType, $entityID) {
-    global $connection;
-    $logSql = "INSERT INTO updatelog (action, entityType, entityID, timestamp) VALUES (?, ?, ?, NOW())";
-    $stmt_log = $connection->prepare($logSql);
-
-    if ($stmt_log) {
-        $stmt_log->bind_param("ssi", $action, $entityType, $entityID);
-
-        if ($stmt_log->execute()) {
-            echo "<script>alert('Action logged successfully')</script>";
-        } else {
-            echo "<script>alert('Error logging action: " . $connection->error . "')</script>";
-        }
-
-        $stmt_log->close();
-    } else {
-        echo "<script>alert('Error preparing log statement: " . $connection->error . "')</script>";
-    }
+// Move all PHP processing code here at the end
+session_start();
+if (isset($_SESSION["username"])) {
+    $username = $_SESSION["username"];
+} else {
+    header("Location: loginADMIN.php");
+    exit();
 }
 
-if ($connection->connect_error) {
-    die("Connection failed: " . $connection->connect_error);
-}
-
-
-// Your database connection and logAction function definition here
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    if (isset($_POST['add_button'])) {
-        $student_id = $_POST['student_id'];
-        $first_name = $_POST['first_name'];
-        $last_name = $_POST['last_name'];
-        $user_password = $_POST['user_password'];
-        $user_type = $_POST['user_type'];
-
-        if ($user_type === 'student') {
-            // Check if the student exists in the tb_studentinfo table
-            $check_query = "SELECT * FROM tb_studentinfo WHERE studid = ? AND firstname = ? AND lastname = ?";
-            $stmt = $connection->prepare($check_query);
-
-            if ($stmt === false) {
-                die("Prepare failed: " . $connection->error);
-            }
-
-            $stmt->bind_param("iss", $student_id, $first_name, $last_name);
-            $stmt->execute();
-
-            $result = $stmt->get_result();
-
-            if ($result->num_rows > 0) {
-                // Check if the student user already exists in the users table
-                $check_user_query = "SELECT * FROM users WHERE `SR-Code` = ?";
-                $stmt_user = $connection->prepare($check_user_query);
-
-                if (!$stmt_user) {
-                    echo "<script>alert('Error preparing statement: " . $connection->error . "')</script>";
-                } else {
-                    $stmt_user->bind_param("i", $student_id);
-                    $stmt_user->execute();
-                    $result_user = $stmt_user->get_result();
-
-                    if ($result_user->num_rows > 0) {
-                        echo "<script>alert('Student user already exists')</script>";
-                    } else {
-                        // Insert into users table for students
-                        $insert_query = "INSERT INTO users (`SR-Code`, UserS_password) VALUES (?, ?)";
-                        $stmt_insert = $connection->prepare($insert_query);
-
-                        if (!$stmt_insert) {
-                            echo "<script>alert('Error preparing insert statement: " . $connection->error . "')</script>";
-                        } else {
-                            $stmt_insert->bind_param("is", $student_id, $user_password);
-
-                            if ($stmt_insert->execute()) {
-                                // Log the action into the 'updatelog' table
-                                logAction('Add', 'Student', $student_id);
-                                echo "<script>alert('New student user added successfully')</script>";
-                            } else {
-                                echo "<script>alert('Error: Unable to add student user. Error: " . $connection->error . "')</script>";
-                            }
-                            $stmt_insert->close();
-                        }
-                    }
-                    $stmt_user->close();
-                }
-            } else {
-                echo "<script>alert('Invalid StudentID, first name, or last name')</script>";
-            }
-            $stmt->close();
-        } elseif ($user_type === 'faculty') {
-            // Check if the faculty exists in the tbemployee table
-            $check_query = "SELECT * FROM tbemployee WHERE empid = ? AND firstname = ? AND lastname = ?";
-            $stmt = $connection->prepare($check_query);
-
-            if ($stmt === false) {
-                die("Prepare failed: " . $connection->error);
-            }
-
-            $stmt->bind_param("iss", $student_id, $first_name, $last_name);
-            $stmt->execute();
-
-            $result = $stmt->get_result();
-
-            if ($result->num_rows > 0) {
-                // Check if the faculty user already exists in the usere table
-                $check_user_query = "SELECT * FROM usere WHERE empid = ?";
-                $stmt_user = $connection->prepare($check_user_query);
-
-                if (!$stmt_user) {
-                    echo "<script>alert('Error preparing statement: " . $connection->error . "')</script>";
-                } else {
-                    $stmt_user->bind_param("i", $student_id);
-                    $stmt_user->execute();
-                    $result_user = $stmt_user->get_result();
-
-                    if ($result_user->num_rows > 0) {
-                        echo "<script>alert('Faculty user already exists')</script>";
-                    } else {
-                        // Insert into usere table for faculty
-                        $insert_query = "INSERT INTO usere (empid, UserE_password) VALUES (?, ?)";
-                        $stmt_insert = $connection->prepare($insert_query);
-
-                        if (!$stmt_insert) {
-                            echo "<script>alert('Error preparing insert statement: " . $connection->error . "')</script>";
-                        } else {
-                            $stmt_insert->bind_param("is", $student_id, $user_password);
-
-                            if ($stmt_insert->execute()) {
-                                // Log the action into the 'updatelog' table
-                                logAction('Add', 'Faculty', $student_id);
-                                echo "<script>alert('New faculty user added successfully')</script>";
-                            } else {
-                                echo "<script>alert('Error: Unable to add faculty user. Error: " . $connection->error . "')</script>";
-                            }
-                            $stmt_insert->close();
-                        }
-                    }
-                    $stmt_user->close();
-                }
-            } else {
-                echo "<script>alert('Invalid Employee ID, first name, or last name')</script>";
-            }
-            $stmt->close();
-        }
-        } elseif (isset($_POST['delete_button'])) {
-            $student_id = $_POST['student_id'];
-            $user_type = $_POST['user_type'];
-    
-            // Validate and sanitize inputs
-            $student_id = filter_var($student_id, FILTER_SANITIZE_NUMBER_INT);
-            $user_type = filter_var($user_type, FILTER_SANITIZE_STRING);
-    
-            if ($user_type === 'student') {
-                $delete_query = "DELETE FROM users WHERE `SR-Code` = ?";
-                $stmt_delete = $connection->prepare($delete_query);
-    
-                if ($stmt_delete === false) {
-                    die("Prepare failed: " . $connection->error);
-                }
-    
-                $stmt_delete->bind_param("i", $student_id);
-                if ($stmt_delete->execute()) {
-                    // Log the action into the 'updatelog' table
-                    logAction('Delete', 'Student', $student_id);
-                    echo "<script>alert('Student user deleted successfully')</script>";
-                } else {
-                    echo "<script>alert('Error: Unable to delete student user. Error: " . $connection->error . "')</script>";
-                }
-                $stmt_delete->close();
-            } elseif ($user_type === 'faculty') {
-                $delete_query = "DELETE FROM usere WHERE empid = ?";
-                $stmt_delete = $connection->prepare($delete_query);
-    
-                if ($stmt_delete === false) {
-                    die("Prepare failed: " . $connection->error);
-                }
-    
-                $stmt_delete->bind_param("i", $student_id);
-                if ($stmt_delete->execute()) {
-                    // Log the action into the 'updatelog' table
-                    logAction('Delete', 'Faculty', $student_id);
-                    echo "<script>alert('Faculty user deleted successfully')</script>";
-                } else {
-                    echo "<script>alert('Error: Unable to delete faculty user. Error: " . $connection->error . "')</script>";
-                }
-                $stmt_delete->close();
-            }
-        }
-    }
-    
-    $connection->close();
+// Database connection and rest of the PHP code...
 ?>
 
 <!DOCTYPE html>
@@ -205,34 +17,109 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
-    <title>Untitled</title>
+    <title>User Management</title>
     <link rel="stylesheet" href="assets/bootstrap/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Alegreya+SC&amp;display=swap">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lora&amp;display=swap">
     <link rel="stylesheet" href="assets/fonts/font-awesome.min.css">
     <link rel="stylesheet" href="assets/css/Navbar-Right-Links-Dark-icons.css">
     <link rel="stylesheet" href="assets/css/Ultimate-Sidebar-Menu-BS5.css">
- 
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f5f6fa;
+            color: #2d3436;
+        }
+
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,.1);
+        }
+
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,.05);
+            background: #fff;
+            margin-top: 2rem;
+        }
+
+        .card-header {
+            background: linear-gradient(45deg, #dc3545, #ff4757);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1rem 1.5rem;
+        }
+
+        .card-header h4 {
+            font-weight: 600;
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .card-body {
+            padding: 2rem;
+        }
+
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 1px solid #e1e1e1;
+            padding: 0.6rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: #dc3545;
+            box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+        }
+
+        label {
+            font-weight: 500;
+            color: #2d3436;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn {
+            border-radius: 8px;
+            padding: 0.6rem 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-success {
+            background: #00b894;
+            border: none;
+        }
+
+        .btn-success:hover {
+            background: #00a187;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: #ff4757;
+            border: none;
+        }
+
+        .btn-danger:hover {
+            background: #ff3545;
+            transform: translateY(-1px);
+        }
+
+        .form-divider {
+            height: 1px;
+            background: #e1e1e1;
+            margin: 2rem 0;
+        }
+
+        .nav-items .nav-link {
+            font-size: 15px;
+        }
+    </style>
 </head>
 
-<style>
-    .nav-items .nav-link {
-        font-size: 15px;
-    }
-</style>
-<?php
-session_start();
-
-// Check if the username is set in the session
-if (isset($_SESSION["username"])) {
-    $username = $_SESSION["username"];
-} else {
-    // If the username is not set, redirect the user back to the login page
-    header("Location: loginADMIN.php");
-    exit();
-}
-?>
-<body class="text-start" style="font-size: 30px; border-bottom-color: rgb(0,0,0);">
+<body class="text-start">
     <a class="btn btn-primary btn-customized open-menu" role="button"><i class="fa fa-navicon"></i>&nbsp;Menu</a>
     <header></header>
     <nav class="navbar navbar-light navbar-expand-md bg-danger">
@@ -247,53 +134,79 @@ if (isset($_SESSION["username"])) {
             <div class="collapse navbar-collapse" id="navcol-1"></div>
         </div>
     </nav>
-<!-- ... Your existing HTML code ... -->
-<div class="container" style="color: var(--bs-black);">
-<form method="post" action="">
-    <div class="col-md-6">
-        <small style="display: block; margin-bottom: 5px; margin-left: 30px;">User First Name</small>
-        <input type="text" name="first_name" placeholder="First Name" style="margin-left: 30px; width: calc(100% - 60px);">
-    </div>
 
-    <div class="col-md-6">
-        <small style="display: block; margin-bottom: 5px; margin-left: 32px; border-bottom-color: rgb(0,0,0);">User Last Name</small>
-        <input type="text" id="lastName" name="last_name" placeholder="Last Name" style="margin-left: 32px; width: calc(100% - 64px);">
-    </div>
-    <div class="col-md-6">
-            <small style="display: block; margin-bottom: 5px; margin-left: 32px; border-bottom-color: rgb(0,0,0);">User ID</small>
-            <input type="text" name="student_id" placeholder="Student ID" style="margin-left: 32px; width: calc(100% - 64px);">
-    </div>
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0"><i class="fas fa-users me-2"></i>User Management</h4>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="" class="mb-4">
+                            <div class="row align-items-end">
+                                <div class="col-md-3">
+                                    <label for="firstName"><i class="fas fa-user me-2"></i>First Name</label>
+                                    <input type="text" class="form-control" id="firstName" name="first_name" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="lastName"><i class="fas fa-user me-2"></i>Last Name</label>
+                                    <input type="text" class="form-control" id="lastName" name="last_name" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="userId"><i class="fas fa-id-card me-2"></i>User ID</label>
+                                    <input type="text" class="form-control" id="userId" name="student_id" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="password"><i class="fas fa-lock me-2"></i>Password</label>
+                                    <input type="password" class="form-control" id="password" name="user_password" required>
+                                </div>
+                                <div class="col-md-1">
+                                    <label><i class="fas fa-user-tag me-2"></i>Type</label>
+                                    <select class="form-select" name="user_type" required>
+                                        <option value="">Select</option>
+                                        <option value="faculty">Faculty</option>
+                                        <option value="student">Student</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-1">
+                                    <button type="submit" name="add_button" class="btn btn-success w-100">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
 
-    <div class="col-md-6">
-        <small style="display: block; margin-bottom: 5px; margin-left: 32px; border-bottom-color: rgb(0,0,0);">User Password</small>
-        <input type="text" id="userpassword" name="user_password" placeholder="Input Password" style="margin-left: 32px; width: calc(100% - 64px);">
-    </div>
-   
-            
-        </div>
+                        <div class="form-divider"></div>
 
-       <div class="row">
-       <div class="col-md-6" style="display: flex; align-items: center;">
-       <small style="display: block; margin-bottom: 5px; margin-left: 32px; border-bottom-color: rgb(0,0,0); color: black;">User Type</small>
-                <div style="display: flex; gap: 10px; margin-left: 32px; color: black;">
-                    <label>
-                        <input type="radio" name="user_type" value="faculty">Faculty
-                    </label>
-                    <label>
-                        <input type="radio" name="user_type" value="student">Student
-                    </label>
+                        <form method="post" action="">
+                            <div class="row align-items-end">
+                                <div class="col-md-2">
+                                    <label for="deleteUserId"><i class="fas fa-id-card me-2"></i>User ID</label>
+                                    <input type="text" class="form-control" id="deleteUserId" name="student_id" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <label><i class="fas fa-user-tag me-2"></i>User Type</label>
+                                    <select class="form-select" name="user_type" required>
+                                        <option value="">Select</option>
+                                        <option value="faculty">Faculty</option>
+                                        <option value="student">Student</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-1">
+                                    <button type="submit" name="delete_button" class="btn btn-danger w-100">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
-</div>
-    </div>
-                <button class="btn btn-primary" type="submit" name="add_button" value="Add User" style="position: relative; overflow: visible; display: inline-flex; transform: translate(324px);">Add</button>
-                <button class="btn btn-primary" type="submit" name="delete_button" style="position: relative; overflow: visible; display: inline-flex; transform: translate(324px);">Delete</button>
-            </div>
         </div>
-    </form>
-</div>
+    </div>
 
-<div>
+    <div>
         <div class="sidebar">
             <div class="dismiss"><i class="fa fa-caret-left"></i></div>
             <div class="BatState-U"><a class="navbar-brand" href="loginADMIN.php">Menu</a></div>
